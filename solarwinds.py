@@ -38,7 +38,7 @@ except ImportError:
     import simplejson as json
 
 
-config_file = 'swinds.ini'
+config_file = 'solarwinds.ini'
 
 # Get configuration variables
 config = ConfigParser.ConfigParser()
