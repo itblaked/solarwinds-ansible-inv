@@ -53,13 +53,20 @@ user = config.get('solarwinds', 'npm_user')
 # Orion Password
 password = config.get('solarwinds', 'npm_password')
 # Field for groups
-groupField = 'GroupName'
+# This was changed as per https://www.reddit.com/r/ansible/comments/880pa7/has_anyone_done_dynamic_inventory_from_solarwinds/
+groupField = 'Location'
 # Field for host
 hostField = 'SysName'
 
-payload = "query=SELECT C.Name as GroupName, N.SysName FROM Orion.Nodes as N JOIN Orion.ContainerMemberSnapshots as CM on N.NodeID = CM.EntityID JOIN Orion.Container as C on CM.ContainerID=C.ContainerID WHERE CM.EntityDisplayName = 'Node' AND N.Vendor = 'Cisco'"
 
-use_groups = True
+# Below is the default payload option.
+#payload = "query=SELECT C.Name as GroupName, N.SysName FROM Orion.Nodes as N JOIN Orion.ContainerMemberSnapshots as CM on N.NodeID = CM.EntityID JOIN Orion.Container as C on CM.ContainerID=C.ContainerID WHERE CM.EntityDisplayName = 'Node' AND N.Vendor = 'Cisco'"
+
+#This was added as per https://www.reddit.com/r/ansible/comments/880pa7/has_anyone_done_dynamic_inventory_from_solarwinds/
+payload="query=SELECT NodeID, SysName,IPAddress, Vendor, Location FROM Orion.Nodes WHERE Status=1"
+
+#This was changed as per https://www.reddit.com/r/ansible/comments/880pa7/has_anyone_done_dynamic_inventory_from_solarwinds/
+use_groups = False
 parentField = 'ParentGroupName'
 childField = 'ChildGroupName'
 
