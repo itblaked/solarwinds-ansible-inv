@@ -38,6 +38,9 @@ try:
 except ImportError:
     import simplejson as json
 
+from urllib3 import disable_warnings, exceptions as urllib3exc
+disable_warnings(category=urllib3exc.InsecureRequestWarning)
+
 config_file = os.environ.get('SW_INI_FILE') or 'solarwinds.ini'
 
 #Get configuration variables
