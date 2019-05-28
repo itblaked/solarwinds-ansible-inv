@@ -31,46 +31,42 @@ import argparse
 import ConfigParser
 import requests
 import re
+import os
 
 try:
     import json
 except ImportError:
     import simplejson as json
 
+config_file = os.environ.get('SW_INI_FILE') or 'solarwinds.ini'
 
-config_file = 'solarwinds.ini'
-
-# Get configuration variables
+#Get configuration variables
 config = ConfigParser.ConfigParser()
 config.readfp(open(config_file))
 
-
-
 # Orion Server IP or DNS/hostname
-server = config.get('solarwinds', 'npm_server')
-# Orion Username
-user = config.get('solarwinds', 'npm_user')
-# Orion Password
-password = config.get('solarwinds', 'npm_password')
-# Field for groups
-# This was changed as per https://www.reddit.com/r/ansible/comments/880pa7/has_anyone_done_dynamic_inventory_from_solarwinds/
-groupField = 'Location'
-# Field for host
-hostField = 'SysName'
+server = os.environ.get('SW_SERVER') or config.get('solarwinds', 'npm_server')
 
+# Orion Username
+user = os.environ.get('SW_USER') or config.get('solarwinds', 'npm_user')
+
+# Orion Password
+password = os.environ.get('SW_PASS') or config.get('solarwinds', 'npm_password')
+
+# Field for groups
+groupField = os.environ.get('SW_GROUPFIELD') or 'GroupName'
+
+# Field for host
+hostField = os.environ.get('SW_HOSTFIELD') or 'SysName'
 
 # Below is the default payload option.
-#payload = "query=SELECT C.Name as GroupName, N.SysName FROM Orion.Nodes as N JOIN Orion.ContainerMemberSnapshots as CM on N.NodeID = CM.EntityID JOIN Orion.Container as C on CM.ContainerID=C.ContainerID WHERE CM.EntityDisplayName = 'Node' AND N.Vendor = 'Cisco'"
+payload = os.environ.get('SW_PAYLOAD') or "query=SELECT C.Name as GroupName, N.SysName FROM Orion.Nodes as N JOIN Orion.ContainerMemberSnapshots as CM on N.NodeID = CM.EntityID JOIN Orion.Container as C on CM.ContainerID=C.ContainerID WHERE CM.EntityDisplayName = 'Node' AND N.Vendor = 'Cisco'"
 
-#This was added as per https://www.reddit.com/r/ansible/comments/880pa7/has_anyone_done_dynamic_inventory_from_solarwinds/
-payload="query=SELECT NodeID, SysName,IPAddress, Vendor, Location FROM Orion.Nodes WHERE Status=1"
+use_groups = os.environ.get('SW_USE_GROUPS') or 'True'
+parentField = os.environ.get('SW_PARENTFIELD') or 'ParentGroupName'
+childField = os.environ.get('SW_CHILDFIELD') or 'ChildGroupName'
 
-#This was changed as per https://www.reddit.com/r/ansible/comments/880pa7/has_anyone_done_dynamic_inventory_from_solarwinds/
-use_groups = False
-parentField = 'ParentGroupName'
-childField = 'ChildGroupName'
-
-group_payload = "query=SELECT C.Name as ParentGroupName, CM.Name as ChildGroupName FROM Orion.ContainerMemberSnapshots as CM JOIN Orion.Container as C on CM.ContainerID=C.ContainerID WHERE CM.EntityDisplayName = 'Group'"
+group_payload = os.environ.get('SW_GROUP_PAYLOAD') or "query=SELECT C.Name as ParentGroupName, CM.Name as ChildGroupName FROM Orion.ContainerMemberSnapshots as CM JOIN Orion.Container as C on CM.ContainerID=C.ContainerID WHERE CM.EntityDisplayName = 'Group'"
 
 #payload = "query=SELECT+" + hostField + "+," + groupField + "+FROM+Orion.Nodes"
 url = "https://"+server+":17778/SolarWinds/InformationService/v3/Json/Query"
