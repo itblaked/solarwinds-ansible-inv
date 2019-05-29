@@ -129,8 +129,8 @@ class SwInventory(object):
         hostsData = req.json()
         dumped = eval(json.dumps(hostsData))
         
-        parentField = 'ParentGroupName'
-        childField = 'ChildGroupName'
+        # parentField = 'ParentGroupName'
+        # childField = 'ChildGroupName'
         final_dict = {} 
         for m in dumped['results']:
             # Allow Upper/lower letters and numbers. Replace everything else with underscore
