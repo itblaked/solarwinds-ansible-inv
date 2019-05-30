@@ -41,35 +41,35 @@ except ImportError:
 from urllib3 import disable_warnings, exceptions as urllib3exc
 disable_warnings(category=urllib3exc.InsecureRequestWarning)
 
-config_file = os.environ.get('SW_INI_FILE') or 'solarwinds.ini'
+config_file = os.environ.get('NPM_INI_FILE') or 'solarwinds.ini'
 
 #Get configuration variables
 config = ConfigParser.ConfigParser()
 config.readfp(open(config_file))
 
 # Orion Server IP or DNS/hostname
-server = os.environ.get('SW_SERVER') or config.get('solarwinds', 'npm_server')
+server = os.environ.get('NPM_SERVER') or config.get('solarwinds', 'npm_server')
 
 # Orion Username
-user = os.environ.get('SW_USER') or config.get('solarwinds', 'npm_user')
+user = os.environ.get('NPM_USER') or config.get('solarwinds', 'npm_user')
 
 # Orion Password
-password = os.environ.get('SW_PASS') or config.get('solarwinds', 'npm_password')
+password = os.environ.get('NPM_PASS') or config.get('solarwinds', 'npm_password')
 
 # Field for groups
-groupField = os.environ.get('SW_GROUPFIELD') or 'GroupName'
+groupField = os.environ.get('NPM_GROUPFIELD') or 'GroupName'
 
 # Field for host
-hostField = os.environ.get('SW_HOSTFIELD') or 'SysName'
+hostField = os.environ.get('NPM_HOSTFIELD') or 'SysName'
 
 # Below is the default payload option.
-payload = os.environ.get('SW_PAYLOAD') or "query=SELECT C.Name as GroupName, N.SysName FROM Orion.Nodes as N JOIN Orion.ContainerMemberSnapshots as CM on N.NodeID = CM.EntityID JOIN Orion.Container as C on CM.ContainerID=C.ContainerID WHERE CM.EntityDisplayName = 'Node' AND N.Vendor = 'Cisco'"
+payload = os.environ.get('NPM_PAYLOAD') or "query=SELECT C.Name as GroupName, N.SysName FROM Orion.Nodes as N JOIN Orion.ContainerMemberSnapshots as CM on N.NodeID = CM.EntityID JOIN Orion.Container as C on CM.ContainerID=C.ContainerID WHERE CM.EntityDisplayName = 'Node' AND N.Vendor = 'Cisco'"
 
-use_groups = os.environ.get('SW_USE_GROUPS') or 'True'
-parentField = os.environ.get('SW_PARENTFIELD') or 'ParentGroupName'
-childField = os.environ.get('SW_CHILDFIELD') or 'ChildGroupName'
+use_groups = os.environ.get('NPM_USE_GROUPS') or 'True'
+parentField = os.environ.get('NPM_PARENTFIELD') or 'ParentGroupName'
+childField = os.environ.get('NPM_CHILDFIELD') or 'ChildGroupName'
 
-group_payload = os.environ.get('SW_GROUP_PAYLOAD') or "query=SELECT C.Name as ParentGroupName, CM.Name as ChildGroupName FROM Orion.ContainerMemberSnapshots as CM JOIN Orion.Container as C on CM.ContainerID=C.ContainerID WHERE CM.EntityDisplayName = 'Group'"
+group_payload = os.environ.get('NPM_GROUP_PAYLOAD') or "query=SELECT C.Name as ParentGroupName, CM.Name as ChildGroupName FROM Orion.ContainerMemberSnapshots as CM JOIN Orion.Container as C on CM.ContainerID=C.ContainerID WHERE CM.EntityDisplayName = 'Group'"
 
 #payload = "query=SELECT+" + hostField + "+," + groupField + "+FROM+Orion.Nodes"
 url = "https://"+server+":17778/SolarWinds/InformationService/v3/Json/Query"
