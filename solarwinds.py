@@ -66,8 +66,8 @@ hostField = os.environ.get('NPM_HOSTFIELD') or 'SysName'
 payload = os.environ.get('NPM_PAYLOAD') or "query=SELECT C.Name as GroupName, N.SysName FROM Orion.Nodes as N JOIN Orion.ContainerMemberSnapshots as CM on N.NodeID = CM.EntityID JOIN Orion.Container as C on CM.ContainerID=C.ContainerID WHERE CM.EntityDisplayName = 'Node' AND N.Vendor = 'Cisco'"
 
 use_groups = os.environ.get('NPM_USE_GROUPS') or 'True'
-parentField = os.environ.get('NPM_PARENTFIELD') or 'AppOwner'
-childField = os.environ.get('NPM_CHILDFIELD') or 'Asset_Group'
+parentField = os.environ.get('NPM_PARENTFIELD') or 'ParentGroupName'
+childField = os.environ.get('NPM_CHILDFIELD') or 'ChildGroupName'
 
 group_payload = os.environ.get('NPM_GROUP_PAYLOAD') or "query=SELECT C.Name as ParentGroupName, CM.Name as ChildGroupName FROM Orion.ContainerMemberSnapshots as CM JOIN Orion.Container as C on CM.ContainerID=C.ContainerID WHERE CM.EntityDisplayName = 'Group'"
 
