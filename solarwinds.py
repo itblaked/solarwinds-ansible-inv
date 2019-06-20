@@ -147,7 +147,7 @@ class SwInventory(object):
 
     @staticmethod
     def clean_inventory_item(item):
-        item = re.sub('[^A-Za-z0-9]+', '_', item)
+        # item = re.sub('[^A-Za-z0-9]+', '_', item)
         return item
 
     # Empty inventory for testing.
