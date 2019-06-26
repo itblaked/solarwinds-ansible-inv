@@ -71,12 +71,7 @@ childField = os.environ.get('NPM_CHILDFIELD') or 'ChildGroupName'
 
 group_payload = os.environ.get('NPM_GROUP_PAYLOAD') or "query=SELECT C.Name as ParentGroupName, CM.Name as ChildGroupName FROM Orion.ContainerMemberSnapshots as CM JOIN Orion.Container as C on CM.ContainerID=C.ContainerID WHERE CM.EntityDisplayName = 'Group'"
 
-#payload = "query=SELECT+" + hostField + "+," + groupField + "+FROM+Orion.Nodes"
 url = "https://"+server+":17778/SolarWinds/InformationService/v3/Json/Query"
-req = requests.get(url, params=payload, verify=False, auth=(user, password))
-
-jsonget = req.json()
-
 
 class SwInventory(object):
 
@@ -94,9 +89,11 @@ class SwInventory(object):
         # Called with `--list`.
         if self.args.list:
             self.inventory = self.get_list()
+            print("host dict" + json.dumps(self.inventory, indent=2))
+
             if use_groups:
-                self.groups = self.get_groups()
-                self.add_groups_to_hosts(self.groups)
+                self.groups = self.get_groups(self.inventory)
+                #self.add_groups_to_hosts(self.groups, self.inventory)
         # Called with `--host [hostname]`.
         elif self.args.host:
             # Not implemented, since we return _meta info `--list`.
@@ -106,44 +103,101 @@ class SwInventory(object):
             self.inventory = self.empty_inventory()
 
         print(json.dumps(self.inventory, indent=2))
+        
     def get_list(self):
-        hostsData = jsonget
-        dumped = eval(json.dumps(jsonget))
+        req = requests.get(url, params=payload, verify=False, auth=(user, password))
+        hostsData = req.json()
+        dumped = eval(json.dumps(hostsData))
+        print("hosts payload" + json.dumps(dumped, indent=2))
 
         # Inject data below to speed up script
         final_dict = {'_meta': {'hostvars': {}}}
 
-        # Loop hosts in groups and remove special chars from group names
+        # Add host variables to dictionary
         for m in dumped['results']:
-            # Allow Upper/lower letters and numbers. Replace everything else with underscore
-            m[groupField] = self.clean_inventory_item(m[groupField])
-            if m[groupField] in final_dict:
-                final_dict[m[groupField]]['hosts'].append(m[hostField])
+            final_dict['_meta']['hostvars'].update({m[hostField]: { 
+                "ansible_host": m[hostField], 
+                "AppOwner": m['AppOwner'], 
+                "MachineType": m['MachineType'], 
+                "Environment": m['Environment'],
+                "Asset_Group": m['Asset_Group'],
+                "Responsible_Teams": m['Responsible_Teams'],
+                "NodeID": m['NodeID']
+                }})
+
+        # Add hosts to primary group
+        for host in dumped['results']:
+            if host[parentField] in final_dict:
+                if host[hostField] not in final_dict[host[parentField]]['hosts']:
+                    final_dict[host[parentField]]['hosts'].append(host[hostField])
             else:
-                final_dict[m[groupField]] = {'hosts': [m[hostField]]}
+                final_dict[host[parentField]] = {'hosts': [host[hostField]]}
+                final_dict[host[parentField]].update({'children': []})
         return final_dict
 
-        #if self.args.groups:
-    def get_groups(self):
+    def get_groups(self, inventory):
         req = requests.get(url, params=group_payload, verify=False, auth=(user, password))
         hostsData = req.json()
         dumped = eval(json.dumps(hostsData))
+
+        print("group payload" + json.dumps(dumped, indent=2))
         
-        # parentField = 'ParentGroupName'
-        # childField = 'ChildGroupName'
-        final_dict = {} 
+        inventory.update({
+            "all": {
+                "children": [
+                    "Windows",
+                    "Linux",
+                    "Network"
+                ],
+                "hosts": [],
+                "vars": {},
+            },
+            "Linux": {
+                "children": [],
+                "hosts": [],
+                "vars": {},
+            },
+            "Windows": {
+                "children": [],
+                "hosts": [],
+                "vars": {},
+            },
+            "Network": {
+                "children": [],
+                "hosts": [],
+                "vars": {},
+            },
+        })
         for m in dumped['results']:
             # Allow Upper/lower letters and numbers. Replace everything else with underscore
-            m[parentField] = self.clean_inventory_item(m[parentField])
-            m[childField] = self.clean_inventory_item(m[childField])
-            if m[parentField] in final_dict:
-                final_dict[m[parentField]]['children'].append(m[childField])
-            else:
-                final_dict[m[parentField]] = {'children': [m[childField]]}
-        return final_dict
+            #m[parentField] = self.clean_inventory_item(m[parentField])
+            #m[childField] = self.clean_inventory_item(m[childField])
 
-    def add_groups_to_hosts (self, groups):
-        self.inventory.update(groups)
+            if m[parentField] not in inventory['all']['children']:
+                    inventory['all']['children'].append(m[parentField])
+
+            if "Windows" in m[childField]:
+                if m[childField] not in inventory['Windows']['children']:
+                        inventory['Windows']['children'].append(m[childField])
+
+            if ("Linux" in m[childField]) or ("Red Hat" in m[childField]) or ("Debian" in m[childField]):
+                if m[childField] not in inventory['Linux']['children']:
+                        inventory['Linux']['children'].append(m[childField])
+
+            if ("Cisco" in m[childField]) or ("Catalyst" in m[childField]):
+                if m[childField] not in inventory['Network']['children']:
+                        inventory['Network']['children'].append(m[childField])
+
+            if m[parentField] in inventory:
+                if m[childField] not in inventory[m[parentField]]['children']:
+                    inventory[m[parentField]]['children'].append(m[childField])
+            else:
+                inventory[m[parentField]] = {'children': [m[childField]]}
+        return inventory
+
+    def add_groups_to_hosts (self, groups, inventory):
+        inventory.update(groups)
+        return inventory
 
     @staticmethod
     def clean_inventory_item(item):
