@@ -89,11 +89,9 @@ class SwInventory(object):
         # Called with `--list`.
         if self.args.list:
             self.inventory = self.get_list()
-            print("host dict" + json.dumps(self.inventory, indent=2))
 
             if use_groups:
                 self.groups = self.get_groups(self.inventory)
-                #self.add_groups_to_hosts(self.groups, self.inventory)
         # Called with `--host [hostname]`.
         elif self.args.host:
             # Not implemented, since we return _meta info `--list`.
@@ -108,7 +106,6 @@ class SwInventory(object):
         req = requests.get(url, params=payload, verify=False, auth=(user, password))
         hostsData = req.json()
         dumped = eval(json.dumps(hostsData))
-        print("hosts payload" + json.dumps(dumped, indent=2))
 
         # Inject data below to speed up script
         final_dict = {'_meta': {'hostvars': {}}}
@@ -140,8 +137,6 @@ class SwInventory(object):
         hostsData = req.json()
         dumped = eval(json.dumps(hostsData))
 
-        print("group payload" + json.dumps(dumped, indent=2))
-        
         inventory.update({
             "all": {
                 "children": [
@@ -169,10 +164,6 @@ class SwInventory(object):
             },
         })
         for m in dumped['results']:
-            # Allow Upper/lower letters and numbers. Replace everything else with underscore
-            #m[parentField] = self.clean_inventory_item(m[parentField])
-            #m[childField] = self.clean_inventory_item(m[childField])
-
             if m[parentField] not in inventory['all']['children']:
                     inventory['all']['children'].append(m[parentField])
 
