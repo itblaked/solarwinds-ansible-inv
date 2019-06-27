@@ -56,20 +56,14 @@ user = os.environ.get('NPM_USER') or config.get('solarwinds', 'npm_user')
 # Orion Password
 password = os.environ.get('NPM_PASS') or config.get('solarwinds', 'npm_password')
 
-# Field for groups
-groupField = os.environ.get('NPM_GROUPFIELD') or 'GroupName'
-
 # Field for host
-hostField = os.environ.get('NPM_HOSTFIELD') or 'SysName'
+hostname = os.environ.get('NPM_HOSTFIELD') or 'DNS'
 
 # Below is the default payload option.
-payload = os.environ.get('NPM_PAYLOAD') or "query=SELECT C.Name as GroupName, N.SysName FROM Orion.Nodes as N JOIN Orion.ContainerMemberSnapshots as CM on N.NodeID = CM.EntityID JOIN Orion.Container as C on CM.ContainerID=C.ContainerID WHERE CM.EntityDisplayName = 'Node' AND N.Vendor = 'Cisco'"
+payload = os.environ.get('NPM_PAYLOAD')
 
-use_groups = os.environ.get('NPM_USE_GROUPS') or 'True'
-parentField = os.environ.get('NPM_PARENTFIELD') or 'ParentGroupName'
-childField = os.environ.get('NPM_CHILDFIELD') or 'ChildGroupName'
-
-group_payload = os.environ.get('NPM_GROUP_PAYLOAD') or "query=SELECT C.Name as ParentGroupName, CM.Name as ChildGroupName FROM Orion.ContainerMemberSnapshots as CM JOIN Orion.Container as C on CM.ContainerID=C.ContainerID WHERE CM.EntityDisplayName = 'Group'"
+primary_group = os.environ.get('NPM_PRIMARY_GROUP')
+secondary_group = os.environ.get('NPM_SECONDARY_GROUP')
 
 url = "https://"+server+":17778/SolarWinds/InformationService/v3/Json/Query"
 
@@ -116,8 +110,8 @@ class SwInventory(object):
     def write_hosts_to_inventory(self, inventory, query_data):
         # Add hosts and variables to inventory
         for host in query_data['results']:
-            inventory['_meta']['hostvars'].update({host[hostField]: { 
-                "ansible_host": host[hostField], 
+            inventory['_meta']['hostvars'].update({host[hostname]: { 
+                "ansible_host": host[hostname], 
                 "AppOwner": host['AppOwner'], 
                 "MachineType": host['MachineType'], 
                 "Environment": host['Environment'],
@@ -130,22 +124,22 @@ class SwInventory(object):
     def add_hosts_to_primary_group(self, inventory, query_data):
         # Add hosts to primary group
         for host in query_data['results']:
-            if host[parentField] in inventory:
-                if host[hostField] not in inventory[host[parentField]]['hosts']:
-                    inventory[host[parentField]]['hosts'].append(host[hostField])
+            if host[primary_group] in inventory:
+                if host[hostname] not in inventory[host[primary_group]]['hosts']:
+                    inventory[host[primary_group]]['hosts'].append(host[hostname])
             else:
-                inventory[host[parentField]] = {'hosts': [host[hostField]]}
-                inventory[host[parentField]].update({'children': []})
+                inventory[host[primary_group]] = {'hosts': [host[hostname]]}
+                inventory[host[primary_group]].update({'children': []})
         return inventory
 
     def add_hosts_to_secondary_group(self, inventory, query_data):
         for host in query_data['results']:
-            if host[childField] in inventory:
-                if host[hostField] not in inventory[host[childField]]['hosts']:
-                    inventory[host[childField]]['hosts'].append(host[hostField])
+            if host[secondary_group] in inventory:
+                if host[hostname] not in inventory[host[secondary_group]]['hosts']:
+                    inventory[host[secondary_group]]['hosts'].append(host[hostname])
             else:
-                inventory[host[childField]] = {'hosts': [host[hostField]]}
-                inventory[host[childField]].update({'children': []})
+                inventory[host[secondary_group]] = {'hosts': [host[hostname]]}
+                inventory[host[secondary_group]].update({'children': []})
         return inventory
 
     def set_category_groups(self, inventory):
@@ -185,18 +179,18 @@ class SwInventory(object):
 
     def add_groups_to_categories(self, inventory, query_data):
         for host in query_data['results']:
-            if "Windows" in host[childField]:
-                if host[childField] not in inventory['Windows']['children']:
-                        inventory['Windows']['children'].append(host[childField])
-            elif ("Linux" in host[childField]) or ("Red Hat" in host[childField]) or ("Debian" in host[childField]):
-                if host[childField] not in inventory['Linux']['children']:
-                        inventory['Linux']['children'].append(host[childField])
-            elif ("Cisco" in host[childField]) or ("Catalyst" in host[childField]):
-                if host[childField] not in inventory['Network']['children']:
-                        inventory['Network']['children'].append(host[childField])
+            if "Windows" in host[secondary_group]:
+                if host[secondary_group] not in inventory['Windows']['children']:
+                        inventory['Windows']['children'].append(host[secondary_group])
+            elif ("Linux" in host[secondary_group]) or ("Red Hat" in host[secondary_group]) or ("Debian" in host[secondary_group]):
+                if host[secondary_group] not in inventory['Linux']['children']:
+                        inventory['Linux']['children'].append(host[secondary_group])
+            elif ("Cisco" in host[secondary_group]) or ("Catalyst" in host[secondary_group]):
+                if host[secondary_group] not in inventory['Network']['children']:
+                        inventory['Network']['children'].append(host[secondary_group])
             else:
-                if host[childField] not in inventory['Other']['children']:
-                        inventory['Other']['children'].append(host[childField])
+                if host[secondary_group] not in inventory['Other']['children']:
+                        inventory['Other']['children'].append(host[secondary_group])
         return inventory
 
     @staticmethod
