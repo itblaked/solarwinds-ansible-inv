@@ -73,6 +73,7 @@ group_payload = os.environ.get('NPM_GROUP_PAYLOAD') or "query=SELECT C.Name as P
 
 url = "https://"+server+":17778/SolarWinds/InformationService/v3/Json/Query"
 
+
 class SwInventory(object):
 
     # CLI arguments
@@ -83,66 +84,78 @@ class SwInventory(object):
         self.options = parser.parse_args()
 
     def __init__(self):
-        self.inventory = {}
+        # Initialize  inventory
+        self.inventory = {'_meta': {'hostvars': {}}}
         self.read_cli_args()
 
         # Called with `--list`.
         if self.args.list:
-            self.inventory = self.get_list()
-
-            if use_groups:
-                self.groups = self.get_groups(self.inventory)
+            self.inventory, self.query_data = self.get_hosts(self.inventory, payload)
+            self.inventory = self.write_hosts_to_inventory(self.inventory, self.query_data)
+            self.inventory = self.set_category_groups(self.inventory)
+            self.inventory = self.add_groups_to_categories(self.inventory, self.query_data)
+            self.inventory = self.add_hosts_to_primary_group(self.inventory, self.query_data)
+            self.inventory = self.add_hosts_to_secondary_group(self.inventory, self.query_data)
         # Called with `--host [hostname]`.
         elif self.args.host:
             # Not implemented, since we return _meta info `--list`.
             self.inventory = self.empty_inventory()
-        # If no groups or vars are present, return empty inventory.
+        # If args return empty inventory.
         else:
             self.inventory = self.empty_inventory()
 
+        # Print inventory for Ansible to consume
         print(json.dumps(self.inventory, indent=2))
         
-    def get_list(self):
+    def get_hosts(self, inventory, payload):
         req = requests.get(url, params=payload, verify=False, auth=(user, password))
         hostsData = req.json()
-        dumped = eval(json.dumps(hostsData))
+        query_data = eval(json.dumps(hostsData))
+        return inventory, query_data
 
-        # Inject data below to speed up script
-        final_dict = {'_meta': {'hostvars': {}}}
+    def write_hosts_to_inventory(self, inventory, query_data):
+        # Add hosts and variables to inventory
+        for host in query_data['results']:
+            inventory['_meta']['hostvars'].update({host[hostField]: { 
+                "ansible_host": host[hostField], 
+                "AppOwner": host['AppOwner'], 
+                "MachineType": host['MachineType'], 
+                "Environment": host['Environment'],
+                "Asset_Group": host['Asset_Group'],
+                "Responsible_Teams": host['Responsible_Teams'],
+                "NodeID": host['NodeID']
+            }})
+        return inventory
 
-        # Add host variables to dictionary
-        for m in dumped['results']:
-            final_dict['_meta']['hostvars'].update({m[hostField]: { 
-                "ansible_host": m[hostField], 
-                "AppOwner": m['AppOwner'], 
-                "MachineType": m['MachineType'], 
-                "Environment": m['Environment'],
-                "Asset_Group": m['Asset_Group'],
-                "Responsible_Teams": m['Responsible_Teams'],
-                "NodeID": m['NodeID']
-                }})
-
+    def add_hosts_to_primary_group(self, inventory, query_data):
         # Add hosts to primary group
-        for host in dumped['results']:
-            if host[parentField] in final_dict:
-                if host[hostField] not in final_dict[host[parentField]]['hosts']:
-                    final_dict[host[parentField]]['hosts'].append(host[hostField])
+        for host in query_data['results']:
+            if host[parentField] in inventory:
+                if host[hostField] not in inventory[host[parentField]]['hosts']:
+                    inventory[host[parentField]]['hosts'].append(host[hostField])
             else:
-                final_dict[host[parentField]] = {'hosts': [host[hostField]]}
-                final_dict[host[parentField]].update({'children': []})
-        return final_dict
+                inventory[host[parentField]] = {'hosts': [host[hostField]]}
+                inventory[host[parentField]].update({'children': []})
+        return inventory
 
-    def get_groups(self, inventory):
-        req = requests.get(url, params=group_payload, verify=False, auth=(user, password))
-        hostsData = req.json()
-        dumped = eval(json.dumps(hostsData))
+    def add_hosts_to_secondary_group(self, inventory, query_data):
+        for host in query_data['results']:
+            if host[childField] in inventory:
+                if host[hostField] not in inventory[host[childField]]['hosts']:
+                    inventory[host[childField]]['hosts'].append(host[hostField])
+            else:
+                inventory[host[childField]] = {'hosts': [host[hostField]]}
+                inventory[host[childField]].update({'children': []})
+        return inventory
 
+    def set_category_groups(self, inventory):
         inventory.update({
             "all": {
                 "children": [
                     "Windows",
                     "Linux",
-                    "Network"
+                    "Network",
+                    "Other"
                 ],
                 "hosts": [],
                 "vars": {},
@@ -162,32 +175,28 @@ class SwInventory(object):
                 "hosts": [],
                 "vars": {},
             },
+            "Other": {
+                "children": [],
+                "hosts": [],
+                "vars": {},
+            },
         })
-        for m in dumped['results']:
-            if m[parentField] not in inventory['all']['children']:
-                    inventory['all']['children'].append(m[parentField])
-
-            if "Windows" in m[childField]:
-                if m[childField] not in inventory['Windows']['children']:
-                        inventory['Windows']['children'].append(m[childField])
-
-            if ("Linux" in m[childField]) or ("Red Hat" in m[childField]) or ("Debian" in m[childField]):
-                if m[childField] not in inventory['Linux']['children']:
-                        inventory['Linux']['children'].append(m[childField])
-
-            if ("Cisco" in m[childField]) or ("Catalyst" in m[childField]):
-                if m[childField] not in inventory['Network']['children']:
-                        inventory['Network']['children'].append(m[childField])
-
-            if m[parentField] in inventory:
-                if m[childField] not in inventory[m[parentField]]['children']:
-                    inventory[m[parentField]]['children'].append(m[childField])
-            else:
-                inventory[m[parentField]] = {'children': [m[childField]]}
         return inventory
 
-    def add_groups_to_hosts (self, groups, inventory):
-        inventory.update(groups)
+    def add_groups_to_categories(self, inventory, query_data):
+        for host in query_data['results']:
+            if "Windows" in host[childField]:
+                if host[childField] not in inventory['Windows']['children']:
+                        inventory['Windows']['children'].append(host[childField])
+            elif ("Linux" in host[childField]) or ("Red Hat" in host[childField]) or ("Debian" in host[childField]):
+                if host[childField] not in inventory['Linux']['children']:
+                        inventory['Linux']['children'].append(host[childField])
+            elif ("Cisco" in host[childField]) or ("Catalyst" in host[childField]):
+                if host[childField] not in inventory['Network']['children']:
+                        inventory['Network']['children'].append(host[childField])
+            else:
+                if host[childField] not in inventory['Other']['children']:
+                        inventory['Other']['children'].append(host[childField])
         return inventory
 
     @staticmethod
