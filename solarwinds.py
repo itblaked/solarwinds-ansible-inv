@@ -1,12 +1,17 @@
 #!/usr/bin/env python
 
-
 '''
 Custom dynamic inventory script for Ansible and Solar Winds, in Python.
-This was tested on Python 2.7.6, Orion 2016.2.100, and Ansible  2.3.0.0.
+This was tested on:
+Orion v3
+ansible-2.7.10-1.el7ae.noarch
+ansible-tower-server-3.4.3-1.el7.x86_64
+Python 2.7.5 (default, Mar 26 2019, 22:13:06)
+[GCC 4.8.5 20150623 (Red Hat 4.8.5-36)] on linux2
 
-(c) 2017, Chris Babcock (chris@bluegreenit.com)
+(c) 2019 Vinny Valdez <vvaldez@redhat.com> and David Castellani <dcastell@redhat.com>
 
+Based on original work by Chris Babcock (chris@bluegreenit.com)
 https://github.com/cbabs/solarwinds-ansible-inv
 
 This program is free software: you can redistribute it and/or modify
@@ -56,17 +61,26 @@ user = os.environ.get('NPM_USER') or config.get('solarwinds', 'npm_user')
 # Orion Password
 password = os.environ.get('NPM_PASS') or config.get('solarwinds', 'npm_password')
 
-# Field for host
-hostname = os.environ.get('NPM_HOSTFIELD') or 'DNS'
+# Field for hostname
+hostname_field = os.environ.get('NPM_HOSTNAME_FIELD') or 'DNS'
 
-# Below is the default payload option.
-payload = os.environ.get('NPM_PAYLOAD')
+# Field that contains Operating System
+os_field = os.environ.get('NPM_OS_FIELD') or 'MachineType'
 
-primary_group = os.environ.get('NPM_PRIMARY_GROUP')
-secondary_group = os.environ.get('NPM_SECONDARY_GROUP')
+# List of fields to map to host variables 
+# these should match columns defined in the payload query. 
+# Specified as a comma-separated string, will be converted into an array
+hostvar_fields = os.environ.get('NPM_HOSTVAR_FIELDS') or "DNS,IP,Asset_Group"
+hostvar_fields = hostvar_fields.split(',')
+
+# List of fields to to create and add hosts to
+group_on_fields = os.environ.get('NPM_GROUP_ON_FIELDS') or 'Asset_Group,MachineType'
+group_on_fields = group_on_fields.split(',')
+
+# SWSQL query to send to SolarWinds via REST API
+payload = os.environ.get('NPM_PAYLOAD') or "query=SELECT CP.Asset_Group as Asset_Group, SysName, DNS, IP, MachineType FROM Orion.Nodes as N JOIN Orion.NodesCustomProperties as CP on N.NodeID = CP.NodeID"
 
 url = "https://"+server+":17778/SolarWinds/InformationService/v3/Json/Query"
-
 
 class SwInventory(object):
 
@@ -84,12 +98,12 @@ class SwInventory(object):
 
         # Called with `--list`.
         if self.args.list:
-            self.inventory, self.query_data = self.get_hosts(self.inventory, payload)
-            self.inventory = self.write_hosts_to_inventory(self.inventory, self.query_data)
-            self.inventory = self.set_category_groups(self.inventory)
-            self.inventory = self.add_groups_to_categories(self.inventory, self.query_data)
-            self.inventory = self.add_hosts_to_primary_group(self.inventory, self.query_data)
-            self.inventory = self.add_hosts_to_secondary_group(self.inventory, self.query_data)
+            self.query_results = self.get_hosts(payload)
+            self.inventory = self.write_hosts_to_inventory(self.inventory, self.query_results)
+            self.inventory = self.create_os_groups(self.inventory)
+            self.inventory = self.add_subgroups_to_os_groups(self.inventory, self.query_results)
+            for group in group_on_fields:
+                self.inventory = self.add_hosts_to_group(self.inventory, self.query_results, group)
         # Called with `--host [hostname]`.
         elif self.args.host:
             # Not implemented, since we return _meta info `--list`.
@@ -101,48 +115,30 @@ class SwInventory(object):
         # Print inventory for Ansible to consume
         print(json.dumps(self.inventory, indent=2))
         
-    def get_hosts(self, inventory, payload):
+    def get_hosts(self, payload):
         req = requests.get(url, params=payload, verify=False, auth=(user, password))
-        hostsData = req.json()
-        query_data = eval(json.dumps(hostsData))
-        return inventory, query_data
+        query_results = req.json()
+        return query_results
 
-    def write_hosts_to_inventory(self, inventory, query_data):
+    def write_hosts_to_inventory(self, inventory, query_results):
         # Add hosts and variables to inventory
-        for host in query_data['results']:
-            inventory['_meta']['hostvars'].update({host[hostname]: { 
-                "ansible_host": host[hostname], 
-                "AppOwner": host['AppOwner'], 
-                "MachineType": host['MachineType'], 
-                "Environment": host['Environment'],
-                "Asset_Group": host['Asset_Group'],
-                "Responsible_Teams": host['Responsible_Teams'],
-                "NodeID": host['NodeID']
-            }})
+        for host in query_results['results']:
+            inventory['_meta']['hostvars'].update({host[hostname_field]: {"ansible_host": host[hostname_field] }})
+            for field in hostvar_fields:
+                inventory['_meta']['hostvars'][host[hostname_field]][field] = max(host[field],'')
         return inventory
 
-    def add_hosts_to_primary_group(self, inventory, query_data):
-        # Add hosts to primary group
-        for host in query_data['results']:
-            if host[primary_group] in inventory:
-                if host[hostname] not in inventory[host[primary_group]]['hosts']:
-                    inventory[host[primary_group]]['hosts'].append(host[hostname])
+    def add_hosts_to_group(self, inventory, query_results, group):
+        for host in query_results['results']:
+            if host[group] in inventory:
+                if host[hostname_field] not in inventory[host[group]]['hosts']:
+                    inventory[host[group]]['hosts'].append(host[hostname_field])
             else:
-                inventory[host[primary_group]] = {'hosts': [host[hostname]]}
-                inventory[host[primary_group]].update({'children': []})
+                inventory[host[group]] = {'hosts': [host[hostname_field]]}
+                inventory[host[group]].update({'children': []})
         return inventory
 
-    def add_hosts_to_secondary_group(self, inventory, query_data):
-        for host in query_data['results']:
-            if host[secondary_group] in inventory:
-                if host[hostname] not in inventory[host[secondary_group]]['hosts']:
-                    inventory[host[secondary_group]]['hosts'].append(host[hostname])
-            else:
-                inventory[host[secondary_group]] = {'hosts': [host[hostname]]}
-                inventory[host[secondary_group]].update({'children': []})
-        return inventory
-
-    def set_category_groups(self, inventory):
+    def create_os_groups(self, inventory):
         inventory.update({
             "all": {
                 "children": [
@@ -177,26 +173,21 @@ class SwInventory(object):
         })
         return inventory
 
-    def add_groups_to_categories(self, inventory, query_data):
-        for host in query_data['results']:
-            if "Windows" in host[secondary_group]:
-                if host[secondary_group] not in inventory['Windows']['children']:
-                        inventory['Windows']['children'].append(host[secondary_group])
-            elif ("Linux" in host[secondary_group]) or ("Red Hat" in host[secondary_group]) or ("Debian" in host[secondary_group]):
-                if host[secondary_group] not in inventory['Linux']['children']:
-                        inventory['Linux']['children'].append(host[secondary_group])
-            elif ("Cisco" in host[secondary_group]) or ("Catalyst" in host[secondary_group]):
-                if host[secondary_group] not in inventory['Network']['children']:
-                        inventory['Network']['children'].append(host[secondary_group])
+    def add_subgroups_to_os_groups(self, inventory, query_results):
+        for host in query_results['results']:
+            if "Windows" in host[os_field]:
+                if host[os_field] not in inventory['Windows']['children']:
+                        inventory['Windows']['children'].append(host[os_field])
+            elif ("Linux" in host[os_field]) or ("Red Hat" in host[os_field]) or ("Debian" in host[os_field]):
+                if host[os_field] not in inventory['Linux']['children']:
+                        inventory['Linux']['children'].append(host[os_field])
+            elif ("Cisco" in host[os_field]) or ("Catalyst" in host[os_field]):
+                if host[os_field] not in inventory['Network']['children']:
+                        inventory['Network']['children'].append(host[os_field])
             else:
-                if host[secondary_group] not in inventory['Other']['children']:
-                        inventory['Other']['children'].append(host[secondary_group])
+                if host[os_field] not in inventory['Other']['children']:
+                        inventory['Other']['children'].append(host[os_field])
         return inventory
-
-    @staticmethod
-    def clean_inventory_item(item):
-        # item = re.sub('[^A-Za-z0-9]+', '_', item)
-        return item
 
     # Empty inventory for testing.
     def empty_inventory(self):
