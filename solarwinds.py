@@ -74,8 +74,9 @@ hostvar_fields = os.environ.get('NPM_HOSTVAR_FIELDS') or "DNS,IP,Asset_Group"
 hostvar_fields = hostvar_fields.split(',')
 
 # List of fields to to create and add hosts to
-group_on_fields = os.environ.get('NPM_GROUP_ON_FIELDS') or 'Asset_Group,MachineType'
-group_on_fields = group_on_fields.split(',')
+group_on_fields = os.environ.get('NPM_GROUP_ON_FIELDS') or False
+if group_on_fields:
+    group_on_fields = group_on_fields.split(',')
 
 # SWSQL query to send to SolarWinds via REST API
 payload = os.environ.get('NPM_PAYLOAD') or "query=SELECT CP.Asset_Group as Asset_Group, SysName, DNS, IP, MachineType FROM Orion.Nodes as N JOIN Orion.NodesCustomProperties as CP on N.NodeID = CP.NodeID"
@@ -101,9 +102,12 @@ class SwInventory(object):
             self.query_results = self.get_hosts(payload)
             self.inventory = self.write_hosts_to_inventory(self.inventory, self.query_results)
             self.inventory = self.create_os_groups(self.inventory)
-            self.inventory = self.add_subgroups_to_os_groups(self.inventory, self.query_results)
-            for group in group_on_fields:
-                self.inventory = self.add_hosts_to_group(self.inventory, self.query_results, group)
+            if group_on_fields:
+                self.inventory = self.add_subgroups_to_os_groups(self.inventory, self.query_results)
+                for group in group_on_fields:
+                    self.inventory = self.add_hosts_to_group(self.inventory, self.query_results, group)
+            else:
+                self.inventory = self.add_hosts_to_os_groups(self.inventory, self.query_results)
         # Called with `--host [hostname]`.
         elif self.args.host:
             # Not implemented, since we return _meta info `--list`.
@@ -171,6 +175,22 @@ class SwInventory(object):
                 "vars": {},
             },
         })
+        return inventory
+
+    def add_hosts_to_os_groups(self, inventory, query_results):
+        for host in query_results['results']:
+            if "Windows" in host[os_field]:
+                if host[hostname_field] not in inventory['Windows']['hosts']:
+                        inventory['Windows']['hosts'].append(host[hostname_field])
+            elif ("Linux" in host[os_field]) or ("Red Hat" in host[os_field]) or ("Debian" in host[os_field]):
+                if host[hostname_field] not in inventory['Linux']['hosts']:
+                        inventory['Linux']['hosts'].append(host[hostname_field])
+            elif ("Cisco" in host[os_field]) or ("Catalyst" in host[os_field]):
+                if host[hostname_field] not in inventory['Network']['hosts']:
+                        inventory['Network']['hosts'].append(host[hostname_field])
+            else:
+                if host[os_field] not in inventory['Other']['hosts']:
+                        inventory['Other']['hosts'].append(host[hostname_field])
         return inventory
 
     def add_subgroups_to_os_groups(self, inventory, query_results):
