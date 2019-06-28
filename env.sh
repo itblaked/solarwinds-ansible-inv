@@ -7,6 +7,7 @@ export NPM_HOSTNAME_FIELD="DNS"
 # Field in query results that contains Operating System
 export NPM_OS_FIELD="MachineType"
 # comma-separated list of fields from query results to create and add hosts to as groups - these should NOT be NULL, ensure via payload query
-export NPM_GROUP_ON_FIELDS="Asset_Group,MachineType"
+export NPM_GROUP_ON_FIELDS=""
+#export NPM_GROUP_ON_FIELDS="Asset_Group,MachineType"
 # comma-separated list of fields from query results to map to host variables - these should match columns defined in the payload query 
 export NPM_HOSTVAR_FIELDS="Asset_Group,SysName,DNS,IP,NodeID,MachineType,AppOwner,Responsible_Teams,Environment,APP_Group,APP_Group3,APP_Group2,APP_Group3,Asset_Category,Loc1_SiteCode,Loc2_Region,Loc3_Country"
