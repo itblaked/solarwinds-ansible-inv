@@ -109,9 +109,12 @@ class SwInventory(object):
             self.inventory = self.write_hosts_to_inventory(self.inventory, self.query_results)
             self.inventory = self.create_os_groups(self.inventory)
             if group_on_fields:
-                self.inventory = self.add_subgroups_to_os_groups(self.inventory, self.query_results)
-                for group in group_on_fields:
-                    self.inventory = self.add_hosts_to_group(self.inventory, self.query_results, group)
+                if os_field in group_on_fields:
+                    self.inventory = self.add_os_field_group_to_os_groups(self.inventory, self.query_results)
+                    for group in group_on_fields:
+                        self.inventory = self.add_hosts_to_group(self.inventory, self.query_results, group)
+                else:
+                    self.inventory = self.add_hosts_to_os_groups(self.inventory, self.query_results)
             else:
                 self.inventory = self.add_hosts_to_os_groups(self.inventory, self.query_results)
         # Called with `--host [hostname]`.
@@ -159,6 +162,7 @@ class SwInventory(object):
             else:
                 inventory[host[group]] = {'hosts': [host[hostname_field]]}
                 inventory[host[group]].update({'children': []})
+                inventory[host[group]].update({'vars': {}})
         return inventory
 
     def create_os_groups(self, inventory):
@@ -203,7 +207,7 @@ class SwInventory(object):
 
     def add_hosts_to_os_groups(self, inventory, query_results):
         """Add hosts directly to OS groups matching their 'os_field'
-        NOTE: This is only called if no values were set for 'group_on_fields'
+        NOTE: This is only called if 'os_field' is not defined as a field in 'group_on_fields'
         """
 
         for host in query_results['results']:
@@ -221,7 +225,7 @@ class SwInventory(object):
                         inventory['Other']['hosts'].append(host[hostname_field])
         return inventory
 
-    def add_subgroups_to_os_groups(self, inventory, query_results):
+    def add_os_field_group_to_os_groups(self, inventory, query_results):
         """Add group that was created based on 'os_field' to matching OS group"""
 
         for host in query_results['results']:
