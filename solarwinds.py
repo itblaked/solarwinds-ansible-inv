@@ -64,8 +64,9 @@ password = os.environ.get('SW_PASS') or config.get('solarwinds', 'sw_password')
 # Field to use for hostname
 hostname_field = os.environ.get('SW_HOSTNAME_FIELD') or 'DNS'
 
-# Field that contains Operating System
-os_field = os.environ.get('SW_OS_FIELD') or 'MachineType'
+# Field that is used to group by category
+# e.g. category_field = 'MachineType'
+category_field = os.environ.get('SW_CATEGORY_FIELD') or 'MachineType'
 
 # List of fields to map to host variables 
 # These should match columns defined in the payload query. 
@@ -82,8 +83,14 @@ group_on_fields = os.environ.get('SW_GROUP_ON_FIELDS') or False
 if group_on_fields:
     group_on_fields = group_on_fields.split(',')
 
+categories_definition = os.environ.get('SW_CATEGORIES') or False
+categories = {}
+if categories_definition:
+    for category in categories_definition.split(';'):
+        categories.update({category.split(':')[0]: category.split(':')[-1].split(',')})
+
 # SWSQL query to send to SolarWinds via REST API
-query = os.environ.get('SW_QUERY') or "SELECT CP.Asset_Group as Asset_Group, SysName, DNS, IP, MachineType FROM Orion.Nodes as N JOIN Orion.NodesCustomProperties as CP on N.NodeID = CP.NodeID"
+query = os.environ.get('SW_QUERY') or "SELECT CP.Asset_Group, SysName, DNS, IP, MachineType FROM Orion.Nodes as N JOIN Orion.NodesCustomProperties as CP on N.NodeID = CP.NodeID"
 
 url = "https://"+server+":17778/SolarWinds/InformationService/v3/Json/Query"
 
@@ -106,17 +113,16 @@ class SwInventory(object):
         # Called with `--list`.
         if self.args.list:
             self.query_results = self.get_hosts(query)
-            self.inventory = self.write_hosts_to_inventory(self.inventory, self.query_results)
-            self.inventory = self.create_os_groups(self.inventory)
+            self.inventory = self.add_hosts_to_inventory(self.inventory, self.query_results)
             if group_on_fields:
-                if os_field in group_on_fields:
-                    self.inventory = self.add_os_field_group_to_os_groups(self.inventory, self.query_results)
+                if category_field in group_on_fields:
+                    self.inventory = self.add_to_category_groups(self.inventory, self.query_results, 'children')
                     for group in group_on_fields:
                         self.inventory = self.add_hosts_to_group(self.inventory, self.query_results, group)
                 else:
-                    self.inventory = self.add_hosts_to_os_groups(self.inventory, self.query_results)
+                    self.inventory = self.add_to_category_groups(self.inventory, self.query_results, 'hosts')
             else:
-                self.inventory = self.add_hosts_to_os_groups(self.inventory, self.query_results)
+                self.inventory = self.add_to_category_groups(self.inventory, self.query_results, 'hosts')
         # Called with `--host [hostname]`.
         elif self.args.host:
             # Not implemented, since we return _meta info `--list`.
@@ -135,7 +141,7 @@ class SwInventory(object):
         query_results = req.json()
         return query_results
 
-    def write_hosts_to_inventory(self, inventory, query_results):
+    def add_hosts_to_inventory(self, inventory, query_results):
         """Iterate through results of query and create Ansible-compatible JSON dictionary with hosts 
 
         The defined 'hostname_field' is used to assign the variable 'ansible_host' to the host inventory
@@ -165,82 +171,48 @@ class SwInventory(object):
                 inventory[host[group]].update({'vars': {}})
         return inventory
 
-    def create_os_groups(self, inventory):
-        """Create groups to organize hosts into based on the variable 'os_field'
+    def add_to_category_groups(self, inventory, query_results, group_type):
+        """Add either hosts or groups to category groups matching their 'category_field'"""
 
-        TODO: variablize these groups
-        """
+        def add_category_entry_to_inventory(category, match):
+            """Add host to matching category by 'group_type'. Create category group if needed"""
 
-        inventory.update({
-            "all": {
-                "children": [
-                    "Windows",
-                    "Linux",
-                    "Network",
-                    "Other"
-                ],
-                "hosts": [],
-                "vars": {},
-            },
-            "Linux": {
-                "children": [],
-                "hosts": [],
-                "vars": {},
-            },
-            "Windows": {
-                "children": [],
-                "hosts": [],
-                "vars": {},
-            },
-            "Network": {
-                "children": [],
-                "hosts": [],
-                "vars": {},
-            },
-            "Other": {
-                "children": [],
-                "hosts": [],
-                "vars": {},
-            },
-        })
-        return inventory
+            if category in inventory:
+                if host[append_with] not in inventory[category][group_type]:
+                    inventory[category][group_type].append(host[append_with])
+            else:
+                inventory[category] = {group_type: [host[append_with]]}
+                inventory[category].update({initialize_key: []})
+                inventory[category].update({'vars': {}})
+            return
 
-    def add_hosts_to_os_groups(self, inventory, query_results):
-        """Add hosts directly to OS groups matching their 'os_field'
-        NOTE: This is only called if 'os_field' is not defined as a field in 'group_on_fields'
-        """
+        def match_host_to_category(host):
+            """Match host to category based on 'category_field'. Return on first match."""
+
+            for category, matches in categories.items(): 
+                if matches != ['']:
+                    for match in matches:
+                        if match in host[category_field]:
+                            add_category_entry_to_inventory(category, match)
+                            return
+
+        if group_type == 'hosts':
+            append_with = hostname_field
+            initialize_key = 'children'
+        elif group_type == 'children':
+            append_with = category_field
+            initialize_key = 'hosts'
+
+        for category, matches in categories.items(): 
+            if matches == ['']:
+                category_unmatched = category
+                break
+        else:
+            category_unmatched = 'Other'
 
         for host in query_results['results']:
-            if "Windows" in host[os_field]:
-                if host[hostname_field] not in inventory['Windows']['hosts']:
-                        inventory['Windows']['hosts'].append(host[hostname_field])
-            elif ("Linux" in host[os_field]) or ("Red Hat" in host[os_field]) or ("Debian" in host[os_field]):
-                if host[hostname_field] not in inventory['Linux']['hosts']:
-                        inventory['Linux']['hosts'].append(host[hostname_field])
-            elif ("Cisco" in host[os_field]) or ("Catalyst" in host[os_field]):
-                if host[hostname_field] not in inventory['Network']['hosts']:
-                        inventory['Network']['hosts'].append(host[hostname_field])
-            else:
-                if host[os_field] not in inventory['Other']['hosts']:
-                        inventory['Other']['hosts'].append(host[hostname_field])
-        return inventory
+            match_host_to_category(host)
 
-    def add_os_field_group_to_os_groups(self, inventory, query_results):
-        """Add group that was created based on 'os_field' to matching OS group"""
-
-        for host in query_results['results']:
-            if "Windows" in host[os_field]:
-                if host[os_field] not in inventory['Windows']['children']:
-                        inventory['Windows']['children'].append(host[os_field])
-            elif ("Linux" in host[os_field]) or ("Red Hat" in host[os_field]) or ("Debian" in host[os_field]):
-                if host[os_field] not in inventory['Linux']['children']:
-                        inventory['Linux']['children'].append(host[os_field])
-            elif ("Cisco" in host[os_field]) or ("Catalyst" in host[os_field]):
-                if host[os_field] not in inventory['Network']['children']:
-                        inventory['Network']['children'].append(host[os_field])
-            else:
-                if host[os_field] not in inventory['Other']['children']:
-                        inventory['Other']['children'].append(host[os_field])
         return inventory
 
     # Empty inventory for testing.
