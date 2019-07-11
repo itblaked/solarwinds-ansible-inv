@@ -174,7 +174,7 @@ class SwInventory(object):
     def add_to_category_groups(self, inventory, query_results, group_type):
         """Add either hosts or groups to category groups matching their 'category_field'"""
 
-        def add_category_entry_to_inventory(category, match):
+        def add_category_entry_to_inventory(category):
             """Add host to matching category by 'group_type'. Create category group if needed"""
 
             if category in inventory:
@@ -193,8 +193,16 @@ class SwInventory(object):
                 if matches != ['']:
                     for match in matches:
                         if match in host[category_field]:
-                            add_category_entry_to_inventory(category, match)
+                            add_category_entry_to_inventory(category)
                             return
+                        else:
+                            continue
+                    else:
+                        continue
+                else:
+                    continue
+            else:
+                add_category_entry_to_inventory(category_unmatched)
 
         if group_type == 'hosts':
             append_with = hostname_field

@@ -25,5 +25,5 @@ export SW_HOSTVAR_FIELDS=""
 # Category3 - Any hosts with category_field matching 'More' will be placed here
 # Other - Any hosts not matching one of the previously defined 3 categories will default into this category - this should NOT contain any strings to match
 #
-# e.g. SW_CATEGORIES="Windows:Windows;Linux:Linux,Red Hat,Debian;Network:Cisco,Catalyst;Other;"
+# e.g. SW_CATEGORIES="Windows:Windows;Linux:Linux,Red Hat,Debian;Network:Cisco,Catalyst;Other:"
 export SW_CATEGORIES="Windows:Windows;Linux:Linux,Red Hat,Debian;Network:Cisco,Catalyst;Other:"
