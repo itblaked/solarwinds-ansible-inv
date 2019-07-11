@@ -13,18 +13,17 @@ export SW_CATEGORY_FIELD="MachineType"
 export SW_GROUP_ON_FIELDS="MachineType"
 # comma-separated list of fields from query results to map to host variables - these should match columns defined in the payload query 
 # e.g. SW_HOSTVAR_FIELDS="Asset_Group,SysName,DNS,IP,NodeID,MachineType,AppOwner,Responsible_Teams,Environment,APP_Group,APP_Group3,APP_Group2,APP_Group3,Asset_Category,Loc1_SiteCode,Loc2_Region,Loc3_Country"
-#export SW_HOSTVAR_FIELDS="Asset_Group,SysName,DNS,IP,NodeID,MachineType,AppOwner,Responsible_Teams,Environment,APP_Group,APP_Group3,APP_Group2,APP_Group3,Asset_Category,Loc1_SiteCode,Loc2_Region,Loc3_Country"
 export SW_HOSTVAR_FIELDS=""
-# List of categories and strings used to match against 'os_field'. Any fields not matched will be placed in a category defined with no matching strings
+# List of categories and strings used to match against 'category_field'. Any fields not matched will be placed in a category defined with no matching strings
 # In order to facilitate converting this environment variable into a Python data structure, it should be entered as follows:
 #
 # Category1:Comma,Separated,Strings; Category2:Unique,Matches; Category3:More; Other:
 #
 # In this case there will be 4 total Categories as follows:
-# Category1 - Any hosts with os_field matching one of the strings 'Comma', 'Separated', or 'Strings' will be placed here
-# Category2 - Any hosts with os_field matching one of the strings 'Unique', or 'Matches' will be placed here
-# Category3 - Any hosts with os_field matching 'More' will be placed here
+# Category1 - Any hosts with category_field matching one of the strings 'Comma', 'Separated', or 'Strings' will be placed here
+# Category2 - Any hosts with category_field matching one of the strings 'Unique', or 'Matches' will be placed here
+# Category3 - Any hosts with category_field matching 'More' will be placed here
 # Other - Any hosts not matching one of the previously defined 3 categories will default into this category - this should NOT contain any strings to match
 #
 # e.g. SW_CATEGORIES="Windows:Windows;Linux:Linux,Red Hat,Debian;Network:Cisco,Catalyst;Other;"
-export SW_CATEGORIES="Windows:Windows;Linux:Linux,RedHat,Red Hat,Debian;Network:Cisco,Catalyst;Other:"
+export SW_CATEGORIES="Windows:Windows;Linux:Linux,Red Hat,Debian;Network:Cisco,Catalyst;Other:"

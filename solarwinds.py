@@ -83,7 +83,7 @@ group_on_fields = os.environ.get('SW_GROUP_ON_FIELDS') or False
 if group_on_fields:
     group_on_fields = group_on_fields.split(',')
 
-categories_definition = os.environ.get('SW_CATEGORIES') or False
+categories_definition = os.environ.get('SW_CATEGORIES') or "Windows:Windows;Linux:Linux,Red Hat,Debian;Network:Cisco,Catalyst;Other:"
 categories = {}
 if categories_definition:
     for category in categories_definition.split(';'):
