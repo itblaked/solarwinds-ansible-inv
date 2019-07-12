@@ -195,12 +195,6 @@ class SwInventory(object):
                         if match in host[category_field]:
                             add_category_entry_to_inventory(category)
                             return
-                        else:
-                            continue
-                    else:
-                        continue
-                else:
-                    continue
             else:
                 add_category_entry_to_inventory(category_unmatched)
 
