@@ -90,7 +90,7 @@ if categories_definition:
         categories.update({category.split(':')[0]: category.split(':')[-1].split(',')})
 
 # SWSQL query to send to SolarWinds via REST API
-query = os.environ.get('SW_QUERY') or "SELECT CP.Asset_Group, SysName, DNS, IP, MachineType FROM Orion.Nodes as N JOIN Orion.NodesCustomProperties as CP on N.NodeID = CP.NodeID"
+query = os.environ.get('SW_QUERY') or "SELECT SysName, DNS, IP, MachineType FROM Orion.Nodes as N JOIN Orion.NodesCustomProperties as CP on N.NodeID = CP.NodeID"
 
 url = "https://"+server+":17778/SolarWinds/InformationService/v3/Json/Query"
 
@@ -132,7 +132,7 @@ class SwInventory(object):
             self.inventory = self.empty_inventory()
 
         # Print inventory for Ansible to consume
-        print((json.dumps(self.inventory, indent=2)))
+        print(json.dumps(self.inventory, indent=2))
         
     def get_hosts(self, query):
         """Execute SWSQL query against SolarWinds REST API and return results"""
